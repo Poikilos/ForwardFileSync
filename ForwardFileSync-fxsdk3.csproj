@@ -6,7 +6,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>JakeGustafson</RootNamespace>
     <AssemblyName>ForwardFileSync</AssemblyName>
-    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <SourceAnalysisOverrideSettingsFile>C:\Users\Owner\AppData\Roaming\ICSharpCode/SharpDevelop3.0\Settings.SourceAnalysis</SourceAnalysisOverrideSettingsFile>
     <OutputPath>bin\</OutputPath>
@@ -16,6 +16,8 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <StartWorkingDirectory>bin\</StartWorkingDirectory>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SignAssembly>False</SignAssembly>
+    <DelaySign>False</DelaySign>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>

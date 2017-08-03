@@ -606,7 +606,15 @@ namespace ForwardFileSync {
 			if (sParam_Processed.Contains("[")) {
 				sParam_AsLiteralPath=Common.ReplaceDriveLabelInBracketsWithDriveSlash(sParam_Processed);
 				if (sParam_Processed==sParam_AsLiteralPath) {
+					Console.Error.WriteLine();
+					Console.Error.WriteLine();
+					Console.Error.WriteLine();
 					Console.Error.WriteLine("Could not find drive label in brackets for \""+sParam_Processed+"\"");
+					//Console.Beep(800,500);
+					//Console.Beep(37,2000);
+					Console.Beep(1400,400);
+					Console.Beep(1000,700);
+					Console.Beep(40,2000);
 				}
 			}
 			sParam_Processed=sParam_AsLiteralPath;
@@ -749,7 +757,6 @@ namespace ForwardFileSync {
 								sShowDelay=sParam;
 							}
 							else if (sCommandLower=="showoptions") {
-								bOptionsEverShown=true;//TODO: change to bOptionsSelected and set whenever options change (via selecting OR script) instead
 								ShowOptions();
 							}
 							else if (sCommandLower=="show") {
@@ -863,7 +870,9 @@ namespace ForwardFileSync {
 								Synchronize();
 							}
 							else if (sCommandLower=="deletelogs") {
+								CloseLogs();
 								DeleteLogs();
+								OpenLogs();
 							}
 							else if (sCommandLower=="showtests") {
 								ShowTests();
@@ -917,6 +926,7 @@ namespace ForwardFileSync {
 			return (val.ToLower()=="yes")||(val=="1")||(val.ToLower()=="true")||(val.ToLower()=="on");
 		}
 		public static void ShowOptions() {
+			bOptionsEverShown=true;//TODO: change to bOptionsSelected and set whenever options change (via selecting OR script) instead
 			try {
 				Console.Clear();
 			}
@@ -963,15 +973,20 @@ namespace ForwardFileSync {
 			sParticiple="opening source {SourceRoot:"+ToCSharpConstant(sSourceRoot)+"}";
 			string sProcessedSource=NoEndSlashUnlessJustSlash(sSourceRoot);
 			if (sProcessedSource.EndsWith(":")) sProcessedSource+=@"\";
-			diSourceRoot=new DirectoryInfo(sProcessedSource);
+			if (!sProcessedSource.StartsWith("[")) diSourceRoot=new DirectoryInfo(sProcessedSource);
+			else diSourceRoot=null;
 		}
 		public static void SetDestination(string Folder_FullName) {
 			sDestRoot=Folder_FullName;
 			sParticiple="opening destination {DestRoot:"+ToCSharpConstant(sDestRoot)+"}";
 			string sProcessedDest=NoEndSlashUnlessJustSlash(sDestRoot);
 			if (sProcessedDest.EndsWith(":")) sProcessedDest+=@"\";
-			diDestRoot=new DirectoryInfo(sProcessedDest);
+			if (!sProcessedDest.StartsWith("[")) diDestRoot=new DirectoryInfo(sProcessedDest);
+			else diDestRoot=null;
 		}
+		/// <summary>
+		/// Remember to CloseLogs() then call this then OpenLogs() in that order whenever calling this.
+		/// </summary>
 		public static void DeleteLogs() {
 			SafeDelete(Batch_FullName,false,false);
 			SafeDelete(LogRootFolder_FullName+Common.sDirSep+RetryBatch_Name,false,false);
@@ -1037,41 +1052,47 @@ namespace ForwardFileSync {
 		/// </summary>
 		/// <param name="sPathConsideredOKEvenIfNoSubfolderExists"></param>
 		/// <returns>returns true if root exists even if subfolder doesn't exist</returns>
-		public static bool GoodFolder(string sPath, bool bCreateSubfolderIfMissing) {
+		public static bool VerifyRoot(string sPath, bool bCreateSubfolderIfMissing) {//formerly GoodFolder
 			bool bFoundRoot=false;
 			try {
-				if (sPath!=null&&sPath!="") {
-					if (sPath.Length==3&&sPath[1]==':'&&sPath[2]=='\\') {
-						bFoundRoot=Directory.Exists(sPath);
-					}
-					else if (sPath.Length==2&&sPath[1]==':') {
-						bFoundRoot=Directory.Exists(sPath+"\\");
-					}
-					else {
-						if (bCreateSubfolderIfMissing) {
-							string sExnReturned="";
-							Common.CreateFolderRecursively(out sExnReturned, ref alCreated, sPath);
-							//if running as administrator, all folders in alFoldersCreated should be changed like this (for vista to allow all administrators full control):
-							//"takeown /f "+sFolderNow+" /r /d y"
-							//"icacls "+sFolderNow+" /grant administrators:F /t"
-							//where sFolderNow is each string in alFoldersCreated
-							if (alCreated!=null&&alCreated.Count>0) {
-								foreach (string sFolderNowOrig in alCreated) {
-									string sFolderNow=sFolderNowOrig;
-									AllowFolderToBeAccessibleByAllAdministrators(sFolderNow);
-								}
-							}
-							alCreated.Clear();
+				if (!sPath.StartsWith("[")) {
+					
+					if (sPath!=null&&sPath!="") {
+						if (sPath.Length==3&&sPath[1]==':'&&sPath[2]=='\\') {//is a windows drive
+							bFoundRoot=Directory.Exists(sPath);
 						}
-						bFoundRoot=Directory.Exists(sPath);
-					}//else full folder path (not a windowsish-root)
-				}//end if path not blank
+						else if (sPath.Length==2&&sPath[1]==':') {//is a windows drive without trailing slash so add that before accessing
+							bFoundRoot=Directory.Exists(sPath+"\\");
+						}
+						else {//else is a folder
+							if (bCreateSubfolderIfMissing) {
+								string sExnReturned="";
+								Common.CreateFolderRecursively(out sExnReturned, ref alCreated, sPath);
+								//if running as administrator, all folders in alFoldersCreated should be changed like this (for vista to allow all administrators full control):
+								//"takeown /f "+sFolderNow+" /r /d y"
+								//"icacls "+sFolderNow+" /grant administrators:F /t"
+								//where sFolderNow is each string in alFoldersCreated
+								if (alCreated!=null&&alCreated.Count>0) {
+									foreach (string sFolderNowOrig in alCreated) {
+										string sFolderNow=sFolderNowOrig;
+										AllowFolderToBeAccessibleByAllAdministrators(sFolderNow);
+									}
+								}
+								alCreated.Clear();
+							}
+							bFoundRoot=Directory.Exists(sPath);
+						}//else full folder path (not a windowsish-root)
+					}//end if path not blank
+				}
+				else {//is a path that is missing a root
+					bFoundRoot=false;
+				}
 			}
 			catch (Exception exn) {
 				Console.Error.WriteLine(exn.ToString());
 			}
 			return bFoundRoot;
-		}
+		}//end VerifyRoot
 		public static void WriteTimeStrings(string sCommandNote_Noun) {
 			DateTime dtNow=DateTime.Now;
 			sYYYY_MM_DD=dtNow.Year.ToString().PadLeft(4, cDigit0);//Year.ToString().PadLeft(length, cDigit0);
@@ -1101,12 +1122,13 @@ namespace ForwardFileSync {
 			bEverSynchronized=true;
 			bool bReturnGood=false;
 			bool bGetLocations=true;
-			ConsoleKeyInfo cki=new ConsoleKeyInfo('y', ConsoleKey.Y,false,false,false);
-			if (!GoodFolder(sSourceRoot,false)) sSourceRoot=null;
-			if (!GoodFolder(sDestRoot,true)) sDestRoot=null;
+			ConsoleKeyInfo cki=new ConsoleKeyInfo('y', ConsoleKey.Y,false,false,false);//default is yes (continue)
+			if (!VerifyRoot(sSourceRoot,false)) sSourceRoot=null;
+			if (!VerifyRoot(sDestRoot,true)) sDestRoot=null;
 			if (sSourceRoot==null||sDestRoot==null) {
 				if (!bInteractive) {
 					Console.Clear();
+					Console.WriteLine();
 					Console.WriteLine();
 					Console.WriteLine();
 					Console.Write("  BACKUP CAN'T FIND DRIVE OR LOCATION for ");
@@ -1116,10 +1138,12 @@ namespace ForwardFileSync {
 					Console.WriteLine(sMissing+"!");
 					Console.WriteLine();
 					Console.WriteLine();
+					Console.WriteLine();
+					Console.WriteLine("Insert drive then run Backup again.");
 					Console.WriteLine("press any key to exit...");
 					cki=Console.ReadKey();
 				}
-				else {
+				else {//else interactive
 					Console.WriteLine();
 					while (bGetLocations) {
 						string UserSource_FullName=null;
@@ -1202,7 +1226,7 @@ namespace ForwardFileSync {
 								}
 								bool bKeepGettingFileFullNames=bInteractive;
 								if (alExcludeFile_FullNameI_Lower!=null) bKeepGettingFileFullNames=false;
-								while (bKeepGettingFileFullNames) {
+								while (bKeepGettingFileFullNames) {//starts true if interactive AND doesn't have exclusions already
 									Console.WriteLine();
 									Console.WriteLine();
 									Console.WriteLine("Excluding filenames with full path: "+((alExcludeFile_FullNameI_Lower!=null)?ToList(alExcludeFile_FullNameI_Lower,"\n\t(index+1)  "):"n/a"));
@@ -1234,10 +1258,12 @@ namespace ForwardFileSync {
 								//	Console.WriteLine("Delete if not on source:"+sDeleteIfNotOnSource);
 								//}
 								ConsoleKeyInfo ckiContinue=new ConsoleKeyInfo('y', ConsoleKey.Y,false,false,false);
-								if (!bOptionsEverShown) {
-									ShowOptions();
-									Console.WriteLine("    Continue (y/n)? ");
-									ckiContinue=Console.ReadKey();
+								if (bInteractive) {
+									if (!bOptionsEverShown) { //TODO: avoid interactive stuff when bInteractive==false
+										ShowOptions();
+										Console.WriteLine("    Continue (y/n)? ");
+										ckiContinue=Console.ReadKey();
+									}
 								}
 								//else ckiContinue=new ConsoleKeyInfo('y', ConsoleKey.Y,false,false,false);
 								
@@ -1336,7 +1362,7 @@ namespace ForwardFileSync {
 					Console.WriteLine("Could not finish closing set permissions batch: "+exn.ToString());
 				}
 			}//end if dest and source strings are both non-null
-			else {
+			else {//if either NULL (not found)
 				if (bInteractive) {
 					Console.Write("  BACKUP CAN'T FIND HAND-TYPED DRIVE OR LOCATION for ");
 					string sMissing="";
@@ -1345,7 +1371,7 @@ namespace ForwardFileSync {
 					Console.WriteLine(sMissing+"!");
 					Console.WriteLine();
 					Console.WriteLine();
-					Console.WriteLine("press any key to exit...");
+					Console.WriteLine("press any key to exit...");//if interactive & no location
 					cki=Console.ReadKey();
 				}
 				//else message already shown if !bInteractive (see beginning of method)
@@ -1573,7 +1599,7 @@ namespace ForwardFileSync {
 							iFolderDepth++;
 							bIn=true;
 							
-							 DeleteFileOnDestNotOnSource(diDestSubFolder);
+							DeleteFileOnDestNotOnSource(diDestSubFolder);
 							iFolderDepth--;
 							bIn=false;
 						}
@@ -1819,6 +1845,7 @@ namespace ForwardFileSync {
 						}
 					}//end foreach diSourceSubFolder in diSourceParent
 					string DestFile_FullName="";
+					string sSrcMod="[src.mod=]";//was .
 					long FileTimeFudgeAllowedIn100NanosecondUtcTicks=5*UtcTicks1Second;//adjusted to filesize for each file below
 					foreach (FileInfo fiSourceNow in diSourceParent.GetFiles()) {
 						try {
@@ -1838,7 +1865,7 @@ namespace ForwardFileSync {
 							    || ArrayHasI(alExcludeFile_FullNameI_Lower,fiSourceNow.FullName.ToLower()) ) bIgnore=true;
 							//done AFTER knowing if replaceable now://Console.Error.WriteLine((bIgnore?"(ignored)":"")+"Destination"+(fiDest.Exists?"":"*")+": "+DestFile_FullName);
 							bool bSourceIsNewer_OrHasSameDateAndDestIsIncomplete=false;
-							string sResultChar=bIgnore?"#":"?";//? is fixed below
+							string sResultChar=bIgnore?"[excluded]":"[not checked (this should never happen)]";//? is fixed below //was string sResultChar=bIgnore?"#":"?"
 							
 							if (!bIgnore) {
 								if (fiDest.Exists) { //DestFile_Exists) {
@@ -1855,14 +1882,15 @@ namespace ForwardFileSync {
 									//    || (fiDest.LastWriteTimeUtc.CompareTo(fiSourceNow.LastWriteTimeUtc)!=0) )
 									if ( Common.EqualTo(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks,FileTimeFudgeAllowedIn100NanosecondUtcTicks)) {
 									//this has to happen FIRST no matter what since in case they are not exactly equal to in date (allows for write time)
-										sResultChar=".";
+										sResultChar=sSrcMod; //was .
 									}
+									//TODO: make if start over here??? there is duplication of case above in case below
 									else if ( Common.EqualTo(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks,FileTimeFudgeAllowedIn100NanosecondUtcTicks) && fiDest.Length!=fiSourceNow.Length) {
-										sResultChar="^";
+										sResultChar="[src.len=]";//was ^
 										bSourceIsNewer_OrHasSameDateAndDestIsIncomplete=true;
 									}
 									else if ( Common.LessThan(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks,FileTimeFudgeAllowedIn100NanosecondUtcTicks) ) {
-										sResultChar="*";
+										sResultChar="[dest.mod<]"; //was *
 										bSourceIsNewer_OrHasSameDateAndDestIsIncomplete=true;
 									}
 									else if ( Common.EqualTo(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks,FileTimeFudgeAllowedIn100NanosecondUtcTicks)
@@ -1870,25 +1898,25 @@ namespace ForwardFileSync {
 										RetryFailedSourcesBatch_WriteLine(sRemark_WithSpaceIfNeeded+" NEWER DESTINATION "+fiDest.LastWriteTimeUtc.ToString()+" same date but larger than source (or not modified on source since first copied):");
 										//NOTE: intentionally ignore bMove in order to keep dest!!!
 										RetryFailedSourcesBatch_WriteLine(sRemark_WithSpaceIfNeeded+" "+(sCP)+" "+SafeString(fiDest.FullName,true,true)+" "+SafeString(fiSourceNow.FullName,true,true));
-										sResultChar="~";
+										sResultChar="[dest.len>]"; //was ~
 									}
 									else if (Common.GreaterThan(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks,FileTimeFudgeAllowedIn100NanosecondUtcTicks)) {
 										RetryFailedSourcesBatch_WriteLine(sRemark_WithSpaceIfNeeded+" NEWER DESTINATION "+fiDest.LastWriteTimeUtc.ToString()+" newer than source (by "+Common.AbsoluteDifference(fiDest.LastWriteTimeUtc.Ticks,fiSourceNow.LastWriteTimeUtc.Ticks)+"x100ns (10,000ths of a millisecond) ["+fiDest.LastWriteTimeUtc.Ticks.ToString()+"-"+fiSourceNow.LastWriteTimeUtc.Ticks.ToString()+"=="+(fiDest.LastWriteTimeUtc.Ticks-fiSourceNow.LastWriteTimeUtc.Ticks).ToString()+"]) "+fiSourceNow.LastWriteTimeUtc.ToString()+" (or not modified on source since first copied):");
 										//NOTE: intentionally ignore bMove in order to keep dest!!!
 										RetryFailedSourcesBatch_WriteLine(sRemark_WithSpaceIfNeeded+" "+(sCP)+" "+SafeString(fiDest.FullName,true,true)+" "+SafeString(fiSourceNow.FullName,true,true));
-										sResultChar="!";
+										sResultChar="[dest.mod>]"; //was !
 									}
 									else if (fiDest.Length!=fiSourceNow.Length) {
-										sResultChar="'";//should never happen
+										sResultChar="[dest.len!=src.len (this should never happen)]";//was % //should never happen
 										bSourceIsNewer_OrHasSameDateAndDestIsIncomplete=true;
 									}
-									else sResultChar="%"; //should never happen
+									else sResultChar="[unidentified situation (this should never happen)]"; //should never happen
 								}
-								else sResultChar="+";
+								else sResultChar="[add]";//was +
 							}
 							if (bDebug) {
 								if (bLineNotEnded_Console_Out) Console.WriteLine();
-								Console.Error.WriteLine("Destination"+((sResultChar!=".")?sResultChar:"")+": "+DestFile_FullName);
+								Console.Error.WriteLine("Destination"+((sResultChar!=sSrcMod)?sResultChar:"")+": "+DestFile_FullName);
 								bLineNotEnded_Console_Out=false;
 							}
 							else {

@@ -12,6 +12,8 @@ A console sync program with easy filtering syntax (filename of YAML-like script 
 * If the program fails to load, client needs to download the runtime (such as .NET framework or Mono)
 
 ## Changes
+* (2011-12-19) Fixed problem where drive label in brackets was used as folder
+* (2011-12-19) Added audible 2-tone alarm once per drive not found with given label
 * (2011-02-24) script language changes:
 	* parameterless commands are now possible to implement (see below; commands no longer need a colon to run)
 	* now always displays what follows "show:" as a message (if quoted, removes quotes and changes 	escaped quotes to quotes.)
@@ -33,6 +35,7 @@ A console sync program with easy filtering syntax (filename of YAML-like script 
 * (2009-09-01) added move option
 
 ## Known Issues
+* fix bug where adds deleted files to "Copyable" count
 * Change to Rsync syntax (see sh file on root of TRANSCEND MicroSDHC card)
 * fix issue where writes lots of commands for destination to ResolvePermissions though there are no file copy errors or file copy retry commands
 * make sure that, ONLY in windows (Windows if sDirSep[0]='\'), exclusions and filters are case-insensitive (change Common.is_exclusion_list_case_sensitive)
