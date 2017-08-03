@@ -18,8 +18,6 @@ using ExpertMultimedia;//Common.cs (not yet synchronized w/ JakeGustafson or oth
 namespace ForwardFileSync {
 	class Program {
 		public static int iDebugLevel=2;
-		public static DateTime minimumModificationOrCreationDateTime = DateTime.MinValue;
-		public static int maximumSizeMB = -1;
 		public static bool bDebug {
 			get {
 				return iDebugLevel>1;
@@ -46,7 +44,6 @@ namespace ForwardFileSync {
 		public static bool bIgnoreDriveSpecificFiles=true;
 		public static readonly char[] carrInvalidFileNameChars_Windows=new char[] {'\\','/',':','*','?','"','<','>','|'};
 		public static bool bMove=false;
-		//TODO: public static bool bRemoveFoldersIfNoFilesOrAllIgnored=true;
 		public static bool bOptionsEverShown=false;
 		public static string sMyName="ForwardFileSync";
 		public static bool bInteractive=true;
@@ -81,11 +78,11 @@ namespace ForwardFileSync {
 		public static string sChmod_plus_w="chmod +w";
 		public static string LastCreatedDirectory_FullName="";
 		public static ArrayList alInvalidDrives=new ArrayList();
-		public static ArrayList alExcludeFolder_NameI_Lower=null;//new string[]{"temp","temporary internet files"};//must be lower
+		public static ArrayList alExcludeFolder_NameI_Lower=null;//new string[]{""};//must be lower
 		public static ArrayList alExcludeFolder_FullNameI_Lower=null;//MUST be null //new ArrayList(new string[]{@"c:\windows"});//new string[]{""};//must be lower
 		public static ArrayList alExcludeFile_FullNameI_Lower=null;//new ArrayList(new string[]{@"c:\pagefile.sys"});
 		public static ArrayList alExcludeFileStartsWithI_Lower=null;//new string[] {"itunes library","itunes music library"};//must be lower
-		public static ArrayList alExcludeFileEndsWithI_Lower=null;//new ArrayList(new string[] {".tmp",@"pagefile.sys",@"hiberfil.sys"});//must be lower
+		public static ArrayList alExcludeFileEndsWithI_Lower=null;//new ArrayList(new string[] {@"pagefile.sys",@"hiberfil.sys"});//must be lower
 		public static ArrayList alCreated=new ArrayList();
 		public static string Batch_Name=sMyName+"-DoGeneratedActions"+((Path.DirectorySeparatorChar=='\\')?(".bat"):(".sh"));
 		public static string Batch_FullName=sMyName+"-DoGeneratedActions"+((Path.DirectorySeparatorChar=='\\')?(".bat"):(".sh"));//fixed at start (based on Batch_Name_FirstPart)
@@ -607,7 +604,7 @@ namespace ForwardFileSync {
 			string sParam_Processed=Common.ReplaceSpecialFolders(sPathWithSymbols);
 			string sParam_AsLiteralPath=sParam_Processed;
 			if (sParam_Processed.Contains("[")) {
-				sParam_AsLiteralPath=Common.ReplaceDriveLabelInBracketsWithDriveSlash(sParam_Processed,"[");
+				sParam_AsLiteralPath=Common.ReplaceDriveLabelInBracketsWithDriveSlash(sParam_Processed);
 				if (sParam_Processed==sParam_AsLiteralPath) {
 					Console.Error.WriteLine();
 					Console.Error.WriteLine();
@@ -654,22 +651,20 @@ namespace ForwardFileSync {
 								WaitUsingStringParam(sParam,(sParam.ToLower()=="infinity")?"press any key":"");
 							}//end waitseconds
 							else if (sCommandLower=="logfolder") {
-								string ParamConvertedToActualPath=ConvertSymbolicPathToLiteral(sParam);
-								
+								LogRootFolder_FullName=sParam;//LogRootFolder_FullName+Common.sDirSep+
 								try {
-									if (!Directory.Exists(ParamConvertedToActualPath)
-									    && !Common.IsAbsolutePath(ParamConvertedToActualPath)
+									if (!Directory.Exists(LogRootFolder_FullName)
+									    && !Common.IsAbsolutePath(LogRootFolder_FullName)
 									   ) {
 										try {
-											Directory.CreateDirectory(ParamConvertedToActualPath);
-											Program.AllowFolderToBeAccessibleByAllAdministrators(ParamConvertedToActualPath);
+											Directory.CreateDirectory(LogRootFolder_FullName);
+											Program.AllowFolderToBeAccessibleByAllAdministrators(LogRootFolder_FullName);
 										}
 										catch (Exception exn) {
-											ShowExn(exn,"creating log folder {logfolder:"+SafeString(ParamConvertedToActualPath,true,true)+"}");
+											ShowExn(exn,"creating log folder {logfolder:"+SafeString(LogRootFolder_FullName,true,true)+"}");
 										}
 									}
-									if (Directory.Exists(ParamConvertedToActualPath)) {
-										LogRootFolder_FullName=ParamConvertedToActualPath;
+									if (Directory.Exists(LogRootFolder_FullName)) {
 										if (LogRootFolder_FullName!=""&&!LogRootFolder_FullName.EndsWith(sDirSep)) {
 											LogRootFolder_FullName+=sDirSep;
 										}
@@ -688,18 +683,12 @@ namespace ForwardFileSync {
 										if (LogRootFolder_FullName.Length==1) LogRootFolder_FullName="";
 										else LogRootFolder_FullName=LogRootFolder_FullName.Substring(0,LogRootFolder_FullName.Length-1);
 									}
-									CloseLogs();
-									DeleteLogs();
-									Batch_FullName=LogRootFolder_FullName+Common.sDirSep+Batch_Name;
-									PermissionsBatch_FullName=LogRootFolder_FullName+Common.sDirSep+PermissionsBatch_Name;
-									RetryFFS_FullName=LogRootFolder_FullName+Common.sDirSep+RetryFFS_Name;//unconditional extension since ffs
-									OpenLogs();
 								}
 								catch (Exception exn) {
 									Console.Error.WriteLine("Log folder was an unusable path ("+SafeString(LogRootFolder_FullName,true,true)+") so current folder will be used.");
 									LogRootFolder_FullName="";
 								}
-	
+								
 								/*
 								LogFolder_RelOrFullNameThenSlashElseBlankNonNull=sParam;
 								//if (LogFolder_RelOrFullNameThenSlashElseBlankNonNull.EndsWith(sDirSep)) {
@@ -737,41 +726,21 @@ namespace ForwardFileSync {
 							}//end logfolder
 							else if (sCommandLower=="excludefolderfullname") {
 								if (alExcludeFolder_FullNameI_Lower==null) alExcludeFolder_FullNameI_Lower=new ArrayList();
-								if (!Common.IsNone(sParamLower)) alExcludeFolder_FullNameI_Lower.Add(sParamLower);
-								else alExcludeFolder_FullNameI_Lower.Clear();
-							}
-							else if (sCommandLower=="includefolderfullname") {
-								if (alExcludeFolder_FullNameI_Lower==null) alExcludeFolder_FullNameI_Lower=new ArrayList();
-								alExcludeFolder_FullNameI_Lower.Remove(sParamLower);
+								alExcludeFolder_FullNameI_Lower.Add(sParamLower);
 							}
 							else if (sCommandLower=="excludefilefullname") {
 								if (alExcludeFile_FullNameI_Lower==null) alExcludeFile_FullNameI_Lower=new ArrayList();
-								if (!Common.IsNone(sParamLower)) alExcludeFile_FullNameI_Lower.Add(sParamLower);
-								else alExcludeFile_FullNameI_Lower.Clear();
-							}
-							else if (sCommandLower=="includefilefullname") {
-								if (alExcludeFile_FullNameI_Lower==null) alExcludeFile_FullNameI_Lower=new ArrayList();
 								if (sParamLower!="none") {
-									alExcludeFile_FullNameI_Lower.Remove(sParamLower);
+									alExcludeFile_FullNameI_Lower.Add(sParamLower);
 								}
 							}
 							else if (sCommandLower=="excludeanyfoldernamed") {
 								if (alExcludeFolder_NameI_Lower==null) alExcludeFolder_NameI_Lower=new ArrayList();
-								if (!Common.IsNone(sParamLower)) alExcludeFolder_NameI_Lower.Add(sParamLower);
-								else alExcludeFolder_NameI_Lower.Clear();
-							}
-							else if (sCommandLower=="includeanyfoldernamed") {
-								if (alExcludeFolder_NameI_Lower==null) alExcludeFolder_NameI_Lower=new ArrayList();
-								alExcludeFolder_NameI_Lower.Remove(sParamLower);
+								alExcludeFolder_NameI_Lower.Add(sParamLower);
 							}
 							else if (sCommandLower=="excludeanyfileendingwith") {
 								if (alExcludeFileEndsWithI_Lower==null) alExcludeFileEndsWithI_Lower=new ArrayList();
-								if (!Common.IsNone(sParamLower)) alExcludeFileEndsWithI_Lower.Add(sParamLower);
-								else alExcludeFileEndsWithI_Lower.Clear();
-							}
-							else if (sCommandLower=="includeanyfileendingwith") {
-								if (alExcludeFileEndsWithI_Lower==null) alExcludeFileEndsWithI_Lower=new ArrayList();
-								alExcludeFileEndsWithI_Lower.Remove(sParamLower);
+								alExcludeFileEndsWithI_Lower.Add(sParamLower);
 							}
 							else if (sCommandLower=="source") {
 								string sParam_Processed=ConvertSymbolicPathToLiteral(sParam);
@@ -811,8 +780,6 @@ namespace ForwardFileSync {
 							}
 							else if (sCommandLower=="testonly") {
 								bTestOnly=ToBool(sParam);
-								if (bTestOnly) Console.Error.WriteLine("TestOnly set to TRUE (nothing will be done except writing scripts--see Retry Script for what would have been done)");
-								else Console.Error.WriteLine("TestOnly set to FALSE (files will actually be copied if Synchronize command runs, instead of just writing scripts)");
 							}
 							else if (sCommandLower=="move") {
 								bMove=ToBool(sParamLower);
@@ -898,15 +865,6 @@ namespace ForwardFileSync {
 									RetryFailedSourcesFFS_WriteLine(sLine);
 								}
 							}//end startswith "attribs "
-							else if (sCommandLower=="minimummodificationorcreationdate") {
-								if (sParamLower=="datetime.minvalue") Program.minimumModificationOrCreationDateTime = DateTime.MinValue;
-								else Program.minimumModificationOrCreationDateTime = Convert.ToDateTime(sParam);
-								Console.WriteLine("minimumModificationOrCreationDateTime set to:"+minimumModificationOrCreationDateTime.ToString());
-							}
-							else if (sCommandLower=="maximumsizemb") {
-								Program.maximumSizeMB = Convert.ToInt32(sParam);
-								Console.WriteLine("maximumSizeMB set to:"+maximumSizeMB.ToString());
-							}
 							else if (sCommandLower=="synchronize") {
 								//sSourceRoot and sDestRoot must be good already or this will stop prog with error
 								Synchronize();
@@ -1664,14 +1622,12 @@ namespace ForwardFileSync {
 								Console.WriteLine("Delete:"+fiDest.FullName);
 								bLineNotEnded_Console_Out=false;
 								Batch_WriteLine(sRM+" \""+fiDest.FullName+"\"");
-								if (!bTestOnly) {
-									try {
-										fiDest.Delete();
-									}
-									catch (Exception exn) {
-										ShowExn(exn,"deleting destination file that does not exist on source");
-										Program.RetryFailedSourcesBatch_WriteLine(sRM+" \""+fiDest.FullName+"\"");
-									}
+								try {
+									fiDest.Delete();
+								}
+								catch (Exception exn) {
+									ShowExn(exn,"deleting destination file that does not exist on source");
+									Program.RetryFailedSourcesBatch_WriteLine(sRM+" \""+fiDest.FullName+"\"");
 								}
 							}
 						}
@@ -1683,15 +1639,7 @@ namespace ForwardFileSync {
 							bLineNotEnded_Console_Out=false;
 							Console.WriteLine("Delete:"+diDestParent.FullName);
 							Batch_WriteLine(sRmdir+" \""+diDestParent.FullName+"\"");
-							if (!bTestOnly) {
-								try {
-									diDestParent.Delete(true);
-								}
-								catch (Exception exn) {
-									ShowExn(exn,"deleting destination folder that does not exist on source");
-											Program.RetryFailedSourcesBatch_WriteLine(sRmdir+" \""+diDestParent.FullName+"\"");
-								}
-							}
+							diDestParent.Delete(true);
 						}
 						else sParticiple="skipping (not deleting) destination folder that still exists on source";
 					}//if not a drive-specific folder to leave alone
@@ -1914,17 +1862,6 @@ namespace ForwardFileSync {
 							if ( EndsWithAnyI(sNameLower,alExcludeFileEndsWithI_Lower)
 							    || StartsWithAnyI(sNameLower,alExcludeFileStartsWithI_Lower)
 							    || ArrayHasI(alExcludeFile_FullNameI_Lower,fiSourceNow.FullName.ToLower()) ) bIgnore=true;
-							if (maximumSizeMB>0
-							    && (fiSourceNow.Length/1024/1024>maximumSizeMB) ) {
-								RetryFailedSourcesBatch_WriteLine(sRM+" IGNORED SINCE OVER "+maximumSizeMB.ToString()+"MB: "+fiSourceNow.FullName);
-								bIgnore=true;
-							}
-							if ( (minimumModificationOrCreationDateTime != DateTime.MinValue)
-							    && !(fiSourceNow.CreationTime>=minimumModificationOrCreationDateTime
-							      ||fiSourceNow.LastWriteTime>=minimumModificationOrCreationDateTime) ) {
-								//RetryFailedSourcesBatch_WriteLine(sRM+" IGNORED SINCE EARLIER THAN "+minimumModificationOrCreationDateTime.ToString()+": "+fiSourceNow.FullName);
-								bIgnore=true;
-							}
 							//done AFTER knowing if replaceable now://Console.Error.WriteLine((bIgnore?"(ignored)":"")+"Destination"+(fiDest.Exists?"":"*")+": "+DestFile_FullName);
 							bool bSourceIsNewer_OrHasSameDateAndDestIsIncomplete=false;
 							string sResultChar=bIgnore?"[excluded]":"[not checked (this should never happen)]";//? is fixed below //was string sResultChar=bIgnore?"#":"?"

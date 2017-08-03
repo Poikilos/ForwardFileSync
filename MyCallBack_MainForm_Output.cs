@@ -7,6 +7,8 @@
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace ExpertMultimedia {
 	/// <summary>
@@ -18,9 +20,10 @@ namespace ExpertMultimedia {
 			
 		}
 		public void ShowMessage(string sLine) {
-			Console.Error.WriteLine( (sLine!=null&&sLine!="") ? sLine : "Unknown error received by MyCallBack ShowMessage" );
-			//if (mainformNow!=null)
-				//MainForm.Output(sLine,true);
+			ShowMessage(sLine,true);
+		}
+		public void ShowMessage(string sLine, bool bRefreshForm) {
+			MainForm.Output( (sLine!=null&&sLine!="") ? sLine : "Unknown error received by MyCallBack ShowMessage", bRefreshForm );
 		}
 	}
 }

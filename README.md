@@ -12,6 +12,7 @@ A console sync program with easy filtering syntax (filename of YAML-like script 
 * If the program fails to load, client needs to download the runtime (such as .NET framework or Mono)
 
 ## Changes
+* (2016-01-06) If not yet excluded, check file size range if specified [and content if specified] INSTEAD OF opposite case (if excluded already) which does nothing but redundant exclusion checks preventing actually using max and min file size (long-term bug preventing file size and content check on all previous releases of Backup GoNow, which has been the only program using Common.IsExcludedFile method)
 * (2011-12-19) Fixed problem where drive label in brackets was used as folder
 * (2011-12-19) Added audible 2-tone alarm once per drive not found with given label
 * (2011-02-24) script language changes:
@@ -35,6 +36,10 @@ A console sync program with easy filtering syntax (filename of YAML-like script 
 * (2009-09-01) added move option
 
 ## Known Issues
+* URGENT use "%APPDATA%\Backup GoNow\profiles" for storing profiles (copies default profile to it, minus comments, at first run)
+* URGENT Keep track of order of preferred drives (by label) -- implemented in Backup GoNow
+* URGENT Automatically exclude drives named LENOVO or RECOVERY or HP_RECOVERY (see Backup GoNow for complete list)
+* Improve performance: do not traverse folder if excluded (for main traversal AND deletion traversal)
 * fix bug where adds deleted files to "Copyable" count
 * Change to Rsync syntax (see sh file on root of TRANSCEND MicroSDHC card)
 * fix issue where writes lots of commands for destination to ResolvePermissions though there are no file copy errors or file copy retry commands

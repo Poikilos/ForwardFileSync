@@ -1,6 +1,6 @@
 /*
  * Created by SharpDevelop.
- * User: Owner
+ * Author: Jake Gustafson
  * Date: 2/6/2010
  * Time: 3:07 AM
  * 
@@ -12,7 +12,7 @@ using System.IO;
 using System.Collections;
 //using System.Security.AccessControl;
 
-namespace JakeGustafson {
+namespace ExpertMultimedia {
 	/// <summary>
 	/// Description of Common.
 	/// </summary>
@@ -57,6 +57,7 @@ namespace JakeGustafson {
 #endregion debug vars
 #region backup vars
 		public static ArrayList alInvalidDrives=new ArrayList();
+		public static bool is_exclusion_list_case_sensitive=false;
 		public static ArrayList alExtraPseudoRootsToManuallyAdd=new ArrayList();//exists for paths such as those specified to Backup script IncludeDest command can be added to PseudoRoot list regardless of whitelist or excluded drives after PseudoRoot list is calculated
 		private static int iSelectableDrives=0;
 		private static DriveInfo[] driveinfoarrSelectableDrive=null;
@@ -64,13 +65,14 @@ namespace JakeGustafson {
 		private static int iPseudoRoots=0;
 		private static DriveInfo[] driveinfoarrAbsoluteDrives=null;
 		public static int MaskCount {
-			get { return (alMasks!=null)?alMasks.Count:0; }
+			get { return (allowed_names!=null)?allowed_names.Count:0; }
 		}
 #endregion backup vars
 #region vars
 		public static char[] carrBreakAfter=new char[] {'-',':','/','\\'};
-		public static ArrayList alExclusions=new ArrayList();
-		public static ArrayList alMasks=new ArrayList();
+		public static ArrayList excluded_names=new ArrayList(); //operates on folder or file (not full path); formerly alExclusions
+		public static ArrayList excluded_paths=new ArrayList(); //operates on path; formerly alExcludedFolderNames
+		public static ArrayList allowed_names=new ArrayList(); //operates on folder or file (not full path); formerly alMasks
 		public static int Search_MinFileSize=0;//formerly Search_MinFileSize; 0 is flag for no checking
 		public static int Search_MaxFileSize=0;//formerly Search_MaxFileSize; 0 is flag for no checking
 		public static bool bMustIncludeAllTerms=false;
@@ -139,22 +141,45 @@ namespace JakeGustafson {
 		public Common()
 		{
 		}
-#region old ffs backup methods to deprecate
-		public static bool IsExcludedFile(DirectoryInfo diBranch, FileInfo fiNow) {//formerly public bool UseFile(DirectoryInfo diBranch, FileInfo fiNow) {
-			bool bReturn=false;
-			if (alMasks!=null&&alMasks.Count>0) {
-				bReturn=true;
-				foreach (string sMask in alMasks) {
-					if (Common.IsLike(fiNow.Name,sMask)) bReturn=false;
+		
+#region old ffs backup methods now only used by Backup GoNow (deprecate these?)
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="param"></param>
+		/// <returns>true if param == "none", =="null", ==null, or =="" (case insensitive)</returns>
+		public static bool IsNone(string param) {
+			string param_lower=param.ToLower();
+			return param_lower=="none" || param_lower==null || param_lower=="null" || param_lower=="";
+		}
+		public static bool IsExcludedFile(FileInfo fiNow) {//formerly public bool UseFile(DirectoryInfo diBranch, FileInfo fiNow) {
+			bool is_excluded=false;
+			if (allowed_names!=null&&allowed_names.Count>0) {
+				is_excluded=true;
+				foreach (string allowed_name in allowed_names) {
+					if (Common.IsLike(fiNow.Name,allowed_name,is_exclusion_list_case_sensitive)) is_excluded=false;
 				}
 			}
-			foreach (string sExclusion in alExclusions) {
-				if (Common.IsLike(fiNow.Name,sExclusion)) bReturn=true;
+			if (!is_excluded) {
+				foreach (string exclusion_string in excluded_paths) {
+					if (Common.IsLike(fiNow.FullName,exclusion_string,is_exclusion_list_case_sensitive)) {
+						is_excluded=true;
+						break;
+					}
+				}
+			}
+			if (!is_excluded) {
+				foreach (string sExclusion in excluded_names) {
+					if (Common.IsLike(fiNow.Name,sExclusion,is_exclusion_list_case_sensitive)) {
+						is_excluded=true;
+						break;
+					}
+				}
 			}
 			string sVerb="initializing";
-			if (bReturn) {
+			if (!is_excluded) {
 				try {
-					if (!bReturn&&bDebug) {
+					if (!is_excluded&&bDebug) {
 						if (fiNow.Exists) {
 							if (Search_MaxFileSize!=0&&fiNow.Length>Search_MaxFileSize) Console.Error.Write("(file is too big ["+fiNow.Length.ToString()+"bytes])");
 							if (Search_MinFileSize!=0&&fiNow.Length<Search_MaxFileSize) Console.Error.Write("(file is too small ["+fiNow.Length.ToString()+"bytes])");	
@@ -168,7 +193,7 @@ namespace JakeGustafson {
 						sVerb="checking whether content search is appropriate";
 						if (bDebug) Console.Error.Write("File size "+fiNow.Length+" for "+fiNow.Name+" is ok--"+sVerb+".");
 						if (bContentSearch) {
-							//bReturn=true;
+							//is_excluded=true;
 							int iFound=0;
 							sVerb="counting content search buffers";
 							int iFind=bMustIncludeAllTerms?iContentSearches:1;
@@ -191,40 +216,60 @@ namespace JakeGustafson {
 							}//end for find strings
 							if (bDebug&&iFound<iFind) Console.Error.Write("("+iFound.ToString()+"/"+iFind.ToString()+" match)");
 							sVerb="exiting content search";
-							if (iFound<iFind) bReturn=true;//ok since this line only runs if bContentSearch
+							if (iFound<iFind) is_excluded=true;//ok since this line only runs if bContentSearch
 						}//end if content search
-						//else bReturn=false;//no content search needed
+						//else is_excluded=false;//no content search needed
 					}//end if exists and good size
-					//else no good, don't set bReturn
+					else is_excluded=true;
 				}
 				catch (Exception exn) {
-					bReturn=true;
+					is_excluded=true;
 					Console.Error.WriteLine("Exception error in FolderLister UseFile check while "+sVerb+": \""+exn.ToString()+"\"");
 				}
-			}//end if bReturn (is not like exclusions)
+			}//end if is_excluded (is not like exclusions)
 			//if (bDebug) Console.Error.WriteLine();
-			//if (bDebug) Console.Error.WriteLine("File \""+fiNow.Name+"\" fullname \""+fiNow.FullName+"\" ok: "+(bReturn?"yes":"no"));
+			//if (bDebug) Console.Error.WriteLine("File \""+fiNow.Name+"\" fullname \""+fiNow.FullName+"\" ok: "+(is_excluded?"yes":"no"));
 			//if (bDebug) Console.Error.WriteLine();
-			return bReturn;
+			return is_excluded;
 		}//end IsExcludedFile //UseFile
+		
+		/// <summary>
+		/// Checks if folder FullName is in excluded_paths. For excluded_names and allowed_names, only checks Name (not ancestor names).
+		/// </summary>
+		/// <param name="diBranch"></param>
+		/// <returns></returns>
 		public static bool IsExcludedFolder(DirectoryInfo diBranch) {//formerly UseFolder
-			bool bReturn=false;
+			bool is_excluded=false;
 			string sLastExclusion="";
-			foreach (string sExclusion in alExclusions) {
-				sLastExclusion=sExclusion;
-				if (Common.IsLike(diBranch.Name,sExclusion)) {
-					bReturn=true;
-					break;
+			if (!is_excluded) {
+				foreach (string original_exclusion_string in excluded_paths) {
+					string exclusion_string = original_exclusion_string;
+					if (exclusion_string!=sDirSep && exclusion_string.EndsWith(sDirSep)) exclusion_string=exclusion_string.Substring(0,exclusion_string.Length-1);
+					if (Common.IsLike(diBranch.FullName,exclusion_string,is_exclusion_list_case_sensitive)) {
+						is_excluded=true;
+						break;
+					}
 				}
 			}
-			if (bDebug) Console.Error.WriteLine("("+alExclusions.Count.ToString()+(alExclusions.Count==1?"\""+sLastExclusion+"\"":"")+" excluded) Use folder \""+diBranch.Name+"\"? "+(bReturn?"Yes":"No"));
+			if (!is_excluded) {
+				foreach (string sExclusion in excluded_names) {
+					sLastExclusion=sExclusion;
+					if (Common.IsLike(diBranch.Name,sExclusion,is_exclusion_list_case_sensitive)) {
+						is_excluded=true;
+						break;
+					}
+				}
+			}
+			if (bDebug) Console.Error.WriteLine("("+excluded_names.Count.ToString()+(excluded_names.Count==1?"\""+sLastExclusion+"\"":"")+" excluded) Use folder \""+diBranch.Name+"\"? "+(is_excluded?"Yes":"No"));
 			//if (bDebug) Console.Error.WriteLine();
-			//if (bDebug) Console.Error.WriteLine("Folder \""+diBranch.Name+"\" ok: "+(bReturn?"yes":"no"));
+			//if (bDebug) Console.Error.WriteLine("Folder \""+diBranch.Name+"\" ok: "+(is_excluded?"yes":"no"));
 			//if (bDebug) Console.Error.WriteLine();
-			return bReturn;
+			return is_excluded;
 		}
-#endregion old ffs backup methods to deprecate
+#endregion old ffs backup methods now only used by Backup GoNow (deprecate these?)
+
 #region backup methods
+
 		public static void AddDriveToInvalidDrives(string sPath) {
 			if (alInvalidDrives==null) alInvalidDrives=new ArrayList();
 			alInvalidDrives.Add(sPath);
@@ -232,6 +277,82 @@ namespace JakeGustafson {
 		public static void ClearInvalidDrives() {
 			if (alInvalidDrives==null) alInvalidDrives=new ArrayList();
 			else alInvalidDrives.Clear();
+		}
+		/// <summary>
+		/// This compare method loads files as a stream to save memory.
+		/// </summary>
+		/// <param name="File1_FullName"></param>
+		/// <param name="File2_FullName"></param>
+		/// <returns>returns -1 if cannot access files, long.MaxValue if all matched, or #of bytes that matched</returns>
+		public static long Compare(string File1_FullName, string File2_FullName) {
+			string sParticiple="";
+			long valReturn=-1;
+			try {
+				sParticiple="accessing file {File1_FullName:"+( (File1_FullName!=null) ? ("\""+File1_FullName+"\"") : "null" )+"}";
+				FileInfo fi1=new FileInfo(File1_FullName);
+				sParticiple="accessing file {File2_FullName:"+( (File2_FullName!=null) ? ("\""+File2_FullName+"\"") : "null" )+"}";
+				FileInfo fi2=new FileInfo(File2_FullName);
+				valReturn=Compare(fi1,fi2);
+			}
+			catch (Exception exn) {
+				Console.WriteLine("Could not finish Compare(File1_FullName,File2_FullName):"+exn.ToString());
+			}
+			return valReturn;
+		}
+		public const long COMPARE_COULDNOTFINISH=long.MinValue;
+		/// <summary>
+		/// This compare method loads files as a stream to save memory.
+		/// </summary>
+		/// <param name="fi1"></param>
+		/// <param name="fi2"></param>
+		/// <returns>returns positive if matched, Common.COMPARE_COULDNOTFINISH if exception, or other negative if not exact match (-1 TIMES #of bytes at beginning that matched)</returns>
+		public static long Compare(FileInfo fi1, FileInfo fi2) {
+			long valReturn=COMPARE_COULDNOTFINISH;
+			FileStream fs1=null;
+			FileStream fs2=null;
+			try {
+				if (fi1!=null) {
+					if (fi2!=null) {
+						if (fi1.Exists) {
+							if (fi2.Exists) {
+								if (fi1.Length==fi2.Length) {
+									fs1=fi1.OpenRead();
+									fs2=fi2.OpenRead();
+									for (long index=0; index<fi1.Length; index++) {
+										if (fs1.ReadByte()==fs2.ReadByte()) {
+											valReturn++;
+										}
+										else break;
+									}
+									if (valReturn!=fi1.Length) valReturn*=-1;
+									fs1.Close();
+									fs1=null;
+									fs2.Close();
+									fs2=null;
+								}
+								else valReturn=0;
+							}
+							else Console.Error.WriteLine("Error in Compare: fi2 does not exist.");
+						}
+						else Console.Error.WriteLine("Error in Compare: fi1 does not exist.");
+					}
+					else Console.Error.WriteLine("Error in Compare: fi2 null");
+				}
+				else Console.Error.WriteLine("Error in Compare: fi1 null");
+			}
+			catch (Exception exn) {
+				valReturn=COMPARE_COULDNOTFINISH;
+				Console.Error.WriteLine("Could not finish Compare:"+exn.ToString());
+				if (fs1!=null) {
+					try { fs1.Close(); fs1=null;}
+					catch {};//don't care
+				}
+				if (fs2!=null) {
+					try { fs2.Close(); fs2=null;}
+					catch {};//don't care
+				}
+			}
+			return valReturn;
 		}
 		public static string ToString(ArrayList alNow, string sIndent) {
 			if (sIndent==null) sIndent="";
@@ -273,15 +394,55 @@ namespace JakeGustafson {
 		/// </summary>
 		/// <param name="DestName"></param>
 		/// <returns>True if DestName was not specified by an ExcludeDest statement</returns>
-		private static bool IsValidDest(string DestName) {
+		public static bool IsValidDest(string DestName) {
 			bool bValid=true;
+			string DestNameThenSlashUnlessOtherOSOrLabel=DestName;
+			if (!DestName.EndsWith(sDirSep)&&DestName.Contains(sDirSep)) DestNameThenSlashUnlessOtherOSOrLabel+=sDirSep;
 			foreach (string sInvalid in alInvalidDrives) {
-				if (DestName.ToLower()==sInvalid.ToLower()) {
+				string thisInvalidPathThenSlashUnlessOtherOSOrLabel=sInvalid;
+				if (!sInvalid.EndsWith(sDirSep)&&sInvalid.Contains(sDirSep)) thisInvalidPathThenSlashUnlessOtherOSOrLabel+=sDirSep;
+				if (DestNameThenSlashUnlessOtherOSOrLabel.ToLower()==thisInvalidPathThenSlashUnlessOtherOSOrLabel.ToLower()) { //if (DestNameThenSlashUnlessOtherOSOrLabel.ToLower()==sInvalid.ToLower() || DestName.ToLower()==sInvalid.ToLower()) {
 					bValid=false;
+					Console.Error.WriteLine(DestName+" ("+DestNameThenSlashUnlessOtherOSOrLabel+") MATCHES invalid "+sInvalid+" ("+thisInvalidPathThenSlashUnlessOtherOSOrLabel+")");
 					break;
+				}
+				else {
+					Console.Error.WriteLine(DestName+" ("+DestNameThenSlashUnlessOtherOSOrLabel+") does not match invalid "+sInvalid+" ("+thisInvalidPathThenSlashUnlessOtherOSOrLabel+")");
 				}
 			}
 			return bValid;
+		}
+		public static void setPseudoRootCustomInt(int InternalPseudoRootIndex, int set_CustomValue) {
+			try {
+				locinfoarrPseudoRoot[InternalPseudoRootIndex].CustomInt=set_CustomValue;
+			}
+			catch (Exception exn) {
+				Console.Error.WriteLine("Could not finish setting pseudoroot ["+InternalPseudoRootIndex.ToString()+"].CustomInt to "+set_CustomValue.ToString());
+			}
+		}
+		public static LocInfo GetPseudoRoot_ByCustomInt(int thisCustomValue) {
+			LocInfo result=null;
+			if (locinfoarrPseudoRoot!=null) {
+				for (int index=0; index<iPseudoRoots; index++) {
+					if (locinfoarrPseudoRoot[index]!=null&&locinfoarrPseudoRoot[index].CustomInt==thisCustomValue) {
+						result=locinfoarrPseudoRoot[index];
+						break;
+					}
+				}
+			}
+			return result;
+		}
+		public static int GetPseudoRootIndex_ByCustomInt(int thisCustomValue) {
+			int result=-1;
+			if (locinfoarrPseudoRoot!=null) {
+				for (int index=0; index<iPseudoRoots; index++) {
+					if (locinfoarrPseudoRoot[index]!=null&&locinfoarrPseudoRoot[index].CustomInt==thisCustomValue) {
+						result=index;
+						break;
+					}
+				}
+			}
+			return result;
 		}
 		public static LocInfo GetPseudoRoot(int InternalPseudoRootIndex) {
 			LocInfo locinfoReturn=null;
@@ -631,7 +792,15 @@ namespace JakeGustafson {
 			}
 			return iReturn;
 		}//end InternalIndexOfPseudoRootByLabel
-		public static int InternalIndexOfPseudoRootWhereFolderStartsWithItsRoot(string FolderNow, bool bCaseSensitive) {
+		/// <summary>
+		/// Gets the drive that could be the place where the given folder exists (whether it does or not)
+		/// (formerly InternalIndexOfPseudoRootWhereFolderStartsWithItsRoot)
+		/// </summary>
+		/// <param name="FolderNow"></param>
+		/// <param name="bCaseSensitive"></param>
+		/// <returns></returns>
+		private static int InternalIndexOfPseudoRoot_WhereIsOrIsParentOf_FolderFullName(string FolderNow, bool bCaseSensitive) {
+			//TODO: deprecate this method
 			int iReturn=-1;
 			try {
 				if (FolderNow!=null&&FolderNow!=""&&locinfoarrPseudoRoot!=null) {
@@ -656,11 +825,12 @@ namespace JakeGustafson {
 				}
 			}
 			catch (Exception exn) {
-				ShowExn(exn,"","InternalIndexOfPseudoRootWhereFolderStartsWithItsRoot");
+				ShowExn(exn,"","InternalIndexOfPseudoRoot_WhereIsOrIsParentOf_FolderFullName");
 			}
 			return iReturn;
-		}//end 	InternalIndexOfPseudoRootWhereFolderStartsWithItsRoot
-		public static int SelectableDriveIndexWhereIsRootOfFolder(string FolderNow, bool bCaseSensitive) {
+		}//end 	InternalIndexOfPseudoRoot_WhereIsOrIsParentOf_FolderFullName
+		private static int SelectableDriveIndexWhereIsRootOfFolder(string FolderNow, bool bCaseSensitive) {
+			//TODO: deprecate this method
 			int iReturn=-1;
 			try {
 				if (FolderNow!=null&&FolderNow!=""&&driveinfoarrSelectableDrive!=null) {
@@ -689,6 +859,25 @@ namespace JakeGustafson {
 			}
 			return iReturn;
 		}//end SelectableDriveIndexWhereIsRootOfFolder
+		/// <summary>
+		/// Gets the directory separator character for a given path
+		/// </summary>
+		/// <param name="path"></param>
+		/// <returns>A directory separator char (only slash or backslash) otherwise 0x00 if fails to find either.</returns>
+		public static char getSlash(string path) {
+			char slash=(char)0;
+			char notSlash='/';
+			if (Path.DirectorySeparatorChar=='/') notSlash='\\';
+			if (path!=null) {
+				for (int charIndex=0; charIndex<path.Length; charIndex++) {
+					if (path[charIndex]==Path.DirectorySeparatorChar || path[charIndex]==notSlash) {
+						slash=path[charIndex];
+						break;
+					}
+				}
+			}
+			return slash;
+		}
 		public static string SafeString(string val, bool bShowValueAndQuoteIfNonNull) {
 			return ( (val!=null) ? (bShowValueAndQuoteIfNonNull?"\""+val+"\"":"non-null") : "null" );
 		}
@@ -929,6 +1118,7 @@ namespace JakeGustafson {
 			if (mcbNow!=null) mcbNow.ShowMessage(sMsg);
 		}
 #endregion backup methods
+		
 		/// <summary>
 		/// Splits a command line into params delimited by spaces, except spaces within quotes.
 		/// </summary>
@@ -989,13 +1179,13 @@ namespace JakeGustafson {
 			return sarrReturn;
 		}//end SplitSpaceDelimitedParams
 
-		public static string ReplaceDriveLabelInBracketsWithDriveSlash(string Path_WithLabelInBrackets) {
+		public static string ReplaceDriveLabelInBracketsWithDriveSlash(string Path_WithLabelInBrackets, string start_bracket, string end_bracket) {
 			string sReturn=Path_WithLabelInBrackets;
 			try {
 				if (Path_WithLabelInBrackets!=null) {
-					int iPreOpener=Path_WithLabelInBrackets.IndexOf("[");
+					int iPreOpener=Path_WithLabelInBrackets.IndexOf(start_bracket);
 					if (iPreOpener>=0) {
-						int iPostCloser=Path_WithLabelInBrackets.IndexOf("]");
+						int iPostCloser=Path_WithLabelInBrackets.IndexOf(end_bracket);
 						if (iPostCloser>iPreOpener) {
 							int iLabelStart=iPreOpener+1;
 							int iLabelLen=iPostCloser-iPreOpener-1;
@@ -1104,8 +1294,12 @@ namespace JakeGustafson {
 		public static string ToCSVLine(ArrayList alNow) {
 			return ToCSVLine( (string[])alNow.ToArray(typeof(string)) );
 		}
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <returns>allowed_names as CSV line ready to write to file</returns>
 		public static string MasksToCSV() {
-			return ToCSVLine(alMasks);
+			return ToCSVLine(allowed_names);
 		}
 		public static string Plural(string sBase, string sSingularEnding, string sPluralEnding, int iCount) {
 			return iCount==1?sBase+sSingularEnding:sBase+sPluralEnding;
@@ -1146,13 +1340,17 @@ namespace JakeGustafson {
 		public static string ToString(bool var, string sTrue, string sFalse) {
 			return var?"true":"false";
 		}
-		public static bool IsLike(string sHaystack, string sNeedle) {
+		public static bool IsLike(string sHaystack, string sNeedle, bool IsCaseSensitive) {
 			bool bMatch=false;
 			string sDebug="";
 			int iFind=0;
 			int iFound=0;
 			int iNeedle=0;
 			int iHaystack=0;
+			if (!IsCaseSensitive) {
+				sHaystack=sHaystack.ToLower();
+				sNeedle=sNeedle.ToLower();
+			}
 			try {
 				for (int iChar=0; iChar<sNeedle.Length; iChar++) {
 					if (sNeedle[iChar]!='*') iFind++;
@@ -1550,5 +1748,20 @@ namespace JakeGustafson {
 			}
 			return bGood;
 		}//end ProcessDoubleFileBuffersAsQueue
+		public static bool StartsWithAny(string Haystack, string[] Needles) {
+			bool IsFound=false;
+			if (!string.IsNullOrEmpty(Haystack) && Needles!=null) {
+				foreach (string Needle in Needles) {
+					if (!string.IsNullOrEmpty(Needle)) {
+						if (Haystack.StartsWith(Needle)) {
+							IsFound=true;
+							break;
+						}
+					}
+				}
+			}
+			return IsFound;
+		}
+
 	}//end Common
 }//end namespace

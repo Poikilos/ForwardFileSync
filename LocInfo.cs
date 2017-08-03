@@ -10,8 +10,7 @@
 using System;
 using System.IO;
 
-namespace JakeGustafson
-{
+namespace ExpertMultimedia {
 	/// <summary>
 	/// Description of LocInfo.
 	/// </summary>
@@ -20,12 +19,40 @@ namespace JakeGustafson
 
 		public string sErr="";//if not blank, then this drive is not usable!
 		public string VolumeLabel="";
+		public int CustomInt=-1;
+		public long CustomLong=-1;
 		public string DriveRoot_FullNameThenSlash="";//public string FullName="";
 		public string PrefixFolder_Name="";
 		public string DriveLetterFolder="";//only exists if was copied from a windows drive using a windows computer
 		public string Subfolder_NameThenSlash_NoStartingSlash="";
 		public long TotalSize=0;
 		public long UsedSpace=0;
+		
+		public string ToDisplayString() {
+			string result="";
+			string driveRootNoSlash="";
+			if (DriveRoot_FullNameThenSlash!=null) {
+				driveRootNoSlash=DriveRoot_FullNameThenSlash;
+				if (DriveRoot_FullNameThenSlash.Length>2) {
+					driveRootNoSlash=DriveRoot_FullNameThenSlash.Substring(0,DriveRoot_FullNameThenSlash.Length-1); //such as C: instead of C:\
+				}
+			}
+			if (!string.IsNullOrEmpty(VolumeLabel)) {
+				result=VolumeLabel;
+				if (!string.IsNullOrEmpty(driveRootNoSlash) && !driveRootNoSlash.EndsWith(VolumeLabel)) { //check if EndsWith VolumeLabel to avoid something like "FLASHDRIVE1 (/media/FLASHDRIVE1)"
+					result=VolumeLabel+" ("+driveRootNoSlash+")";
+				}
+			}
+			else {
+				if (!string.IsNullOrEmpty(driveRootNoSlash)) {
+					result=DriveRoot_FullNameThenSlash;
+				}
+				else {
+					result="null";
+				}
+			}
+			return result;
+		}
 		
 		public long AvailableFreeSpace {
 			get { return TotalSize-UsedSpace; }
