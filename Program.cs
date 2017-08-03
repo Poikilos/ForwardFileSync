@@ -12,22 +12,24 @@ using System.Collections;
 
 namespace ForwardFileSync {
 	class Program {
+		public static string sParticiple="";
 		public static bool bTestOnly=false; //true: does not actually copy files
 		public static bool bCreateBatch=true; //true: outputs batch instructions to standard output
-		public static bool b_MOVE_MODE=true;
 		public static bool bCopyErrorsLogHereInsteadOfCurrentUserDesktop=true;
 		public static bool bForceOverWriteExisting=true;
 		public static string[] sarrFolderStack=new string[1024];
 		public static int iFolderDepth=0;
-		public static string sSourceRoot=@"C:\backup-2009-11-02\D\Users";
-		public static string sDestRoot=@"C:\Users";
+		public static string sSourceRoot=@"";
+		public static string sDestRoot=@"";
 		public static string sRemark="REM ";//fixed at beginning of program
 		public static string sMD="md";//fixed at beginning of program
 		public static string sCP="copy /y";//fixed at beginning of program
 		public static string LastCreatedDirectory_FullName="";
-		public static string[] sarrExcludeFolderI_Lower=null;//new string[]{"5b8d0c139d209db2e8d23d08","6b9e2ea7a7af660bb765fd93","my documents"};//new string[] {"1.others",};//must be lower
-		public static string[] sarrExcludeFileStartsWithI_Lower=null;//new string[] {"itunes library","itunes music library"};//must be lower
-		public static string[] sarrExcludeFileEndsWithI_Lower=null;//new string[] {".itl"};//must be lower
+		public static ArrayList alExcludeFolder_NameI_Lower=new ArrayList(new string[]{"temp","temporary internet files"});//must be lower
+		public static ArrayList alExcludeFolder_FullNameI_Lower=new ArrayList(new string[]{@"c:\windows"});//new string[]{""};//must be lower
+		public static ArrayList alExcludeFile_FullNameI_Lower=null;//new ArrayList(new string[]{@"c:\pagefile.sys"});
+		public static ArrayList alExcludeFileStartsWithI_Lower=null;//new string[] {"itunes library","itunes music library"};//must be lower
+		public static ArrayList alExcludeFileEndsWithI_Lower=new ArrayList(new string[] {".tmp","hiberfil.sys","pagefile.sys","delloperatingsystemreinstallationcd-slipstream-sp3-sata-nlite.iso"});//must be lower
 		public static string Batch_FullName_FirstPart="ForwardFileSync-DoGeneratedActions";//fixed at beginning of program
 		public static string Batch_FullName="ForwardFileSync-DoGeneratedActions.bat";//fixed at beginning of program
 		public static DirectoryInfo diSourceRoot=null;
@@ -50,12 +52,12 @@ namespace ForwardFileSync {
 			catch {}
 		}
 		public static void AddFailedSourceFile(string File_FullName) {
-			FailedSourcesList_WriteLine(sRemark+"--FAILED to "+(b_MOVE_MODE?"move":"copy")+" from file:"+File_FullName);
+			FailedSourcesList_WriteLine(sRemark+"--FAILED to copy from file:"+File_FullName);
 		}
 		public static void AddFailedSourceFolder(string Folder_FullName) {
 			try {
 				if (Folder_FullName!=sDirSep&&Folder_FullName.EndsWith(sDirSep)) Folder_FullName=Folder_FullName.Substring(0,Folder_FullName.Length-1);
-				FailedSourcesList_WriteLine(sRemark+"--FAILED to "+(b_MOVE_MODE?"move":"copy")+" from folder:"+Folder_FullName);
+				FailedSourcesList_WriteLine(sRemark+"--FAILED to copy from folder:"+Folder_FullName);
 			}
 			catch {}
 		}
@@ -76,9 +78,16 @@ namespace ForwardFileSync {
 			try {if (streamErr!=null) streamErr.Write(val);}
 			catch {}
 			if (bCreateBatch) {
-				Batch_Write(((ErrorWriteBuffer=="")?sRemark:"")+val);
+				Batch_Write(((ErrorWriteBuffer=="")?sRemark:"")+ToOneLine(val));
 			}
 			ErrorWriteBuffer+=val;
+		}
+		public static string ToOneLine(string val) {
+			string sReturn=val;
+			if (sReturn.Contains(Environment.NewLine)) sReturn=sReturn.Replace(Environment.NewLine,"");
+			if (sReturn.Contains("\r")) sReturn=sReturn.Replace("\r","");
+			if (sReturn.Contains("\n")) sReturn=sReturn.Replace("\n","");
+			return sReturn;
 		}
 		public static void Error_WriteLine() {
 			Console.Error.WriteLine();
@@ -93,10 +102,10 @@ namespace ForwardFileSync {
 			Error_Write(val);
 			Error_WriteLine();
 		}
-		public static void ShowExn(Exception exn, string sParticiple) {
+		public static void ShowExn(Exception exn, string ParticipleNow) {
 			Error_WriteLine();
 			Error_Write("Could not finish");
-			if (sParticiple!=null&&sParticiple!="") Error_Write(" while "+sParticiple);
+			if (ParticipleNow!=null&&ParticipleNow!="") Error_Write(" while "+ParticipleNow);
 			else Error_Write("step");
 			Error_WriteLine(":");
 			Error_WriteLine(exn.ToString());
@@ -104,11 +113,44 @@ namespace ForwardFileSync {
 		public static string ToCSharpConstant(string[] array) {
 			string sReturn="";
 			if (array!=null) {
-				sReturn+="{";
+				sReturn+="new string[]{";
 				for (int i=0; i<array.Length; i++) {
 					sReturn+=((i!=0)?"; ":"")+ToCSharpConstant(array[i]);
 				}
 				sReturn+="}";
+			}
+			else sReturn="null";
+			return sReturn;
+		}
+		public static string ToList(ArrayList array, string sListItemOpener_index_becomes_number_indexPLUSSIGN1_can_be_used) {
+			string sReturn="";
+			int i=0;
+			if (array!=null&&array.Count>0) {
+				foreach (string val in array) {
+					sReturn+=sListItemOpener_index_becomes_number_indexPLUSSIGN1_can_be_used.Replace("index+1",(i+1).ToString()).Replace("index",i.ToString())+val;
+					i++;
+				}
+			}
+			else {
+				sReturn="n/a";
+			}
+			return sReturn;
+		}
+		public static string ToCSharpConstant(ArrayList array) {
+			string sReturn="";
+			if (array!=null) {
+				if (array.Count==0) {
+					sReturn="new ArrayList()";
+				}
+				else {
+					sReturn+="new ArrayList(new string[]{";
+					int i=0;
+					foreach (string val in array) {
+						sReturn+=((i!=0)?"; ":"")+ToCSharpConstant(val); //even add "; " on last since c# constant
+						i++;
+					}
+					sReturn+="})";
+				}
 			}
 			else sReturn="null";
 			return sReturn;
@@ -125,106 +167,199 @@ namespace ForwardFileSync {
 			if (sDirSep=="\\") {
 				sRemark="REM ";
 				sMD="md";
-				if (b_MOVE_MODE) sCP="move /y";
-				else sCP="copy /y";
+				sCP="copy /y";
 				Batch_FullName=Batch_FullName_FirstPart+".bat";
 			}
 			else {
 				sRemark="#";
 				sMD="mkdir";
-				if (b_MOVE_MODE) sCP="mv -f";
-				else sCP="cp -f";
+				sCP="cp -f";
 				Batch_FullName=Batch_FullName_FirstPart+".sh";
 			}
-			Batch_FullName_FirstPart="ForwardFileSync";
-			DateTime dtNow=DateTime.Now;
-			sYYYY_MM_DD=dtNow.Year.ToString().PadLeft(4, cDigit0);//Year.ToString().PadLeft(length, cDigit0);
-			sYYYY_MM_DD+="-";
-			sYYYY_MM_DD+=dtNow.Month.ToString().PadLeft(2, cDigit0);
-			sYYYY_MM_DD+="-";
-			sYYYY_MM_DD+=dtNow.Day.ToString().PadLeft(2, cDigit0);
-			sHH_MM_SS=dtNow.Hour.ToString().PadLeft(2, cDigit0);
-			sHH_MM_SS+=":";
-			sHH_MM_SS+=dtNow.Minute.ToString().PadLeft(2, cDigit0);
-			sHH_MM_SS+=":";
-			sHH_MM_SS+=dtNow.Second.ToString().PadLeft(2, cDigit0);
-			sDateTimeNow=sYYYY_MM_DD+"@"+sHH_MM_SS;
-			if (bCreateBatch) streamBatch=new StreamWriter(Batch_FullName);
-			Batch_WriteLine(sRemark+" -- Created "+sDateTimeNow);
-			streamFailedSourcesList=new StreamWriter(FailureList_FullName);
-			FailedSourcesList_WriteLine(sRemark+" -- Created "+sDateTimeNow);
-			string sParticipleNow="initializing output";
-			try {
-				//DateTime.Now.Year.ToString()+"-"+DateTime.Now.Month.ToString()+"-"+DateTime.Now.Day.ToString()
+			bool bGetLocations=true;
+			ConsoleKeyInfo cki=new ConsoleKeyInfo('r', ConsoleKey.R,false,false,false);
+			Console.WriteLine("Welcome to ForwardFileSync!");
+			while (bGetLocations) {
+				Console.WriteLine();
+				Console.Write("source:#");
+				sSourceRoot=Console.ReadLine();
+				Console.Write("destination:#");
+				sDestRoot=Console.ReadLine();
+				Console.WriteLine();
+				Console.WriteLine("source=\""+sSourceRoot+"\"");
+				Console.WriteLine("destination=\""+sDestRoot+"\"");
+				Console.Write("OK?(y[es]/n[o]/r[etry]): ");
+				cki=Console.ReadKey();
+				if (cki.Key==ConsoleKey.R) bGetLocations=true;
+				else bGetLocations=false;
+			}
+			if (cki.Key==ConsoleKey.Y) {
+				Batch_FullName_FirstPart="ForwardFileSync";
+				DateTime dtNow=DateTime.Now;
+				sYYYY_MM_DD=dtNow.Year.ToString().PadLeft(4, cDigit0);//Year.ToString().PadLeft(length, cDigit0);
+				sYYYY_MM_DD+="-";
+				sYYYY_MM_DD+=dtNow.Month.ToString().PadLeft(2, cDigit0);
+				sYYYY_MM_DD+="-";
+				sYYYY_MM_DD+=dtNow.Day.ToString().PadLeft(2, cDigit0);
+				sHH_MM_SS=dtNow.Hour.ToString().PadLeft(2, cDigit0);
+				sHH_MM_SS+=":";
+				sHH_MM_SS+=dtNow.Minute.ToString().PadLeft(2, cDigit0);
+				sHH_MM_SS+=":";
+				sHH_MM_SS+=dtNow.Second.ToString().PadLeft(2, cDigit0);
+				sDateTimeNow=sYYYY_MM_DD+"@"+sHH_MM_SS;
+				if (bCreateBatch) streamBatch=new StreamWriter(Batch_FullName);
+				Batch_WriteLine(sRemark+" -- Created "+sDateTimeNow);
+				streamFailedSourcesList=new StreamWriter(FailureList_FullName);
+				FailedSourcesList_WriteLine(sRemark+" -- Created "+sDateTimeNow);
+				sParticiple="initializing output";
 				try {
-					string CopyErrorsFile_FullName=b_MOVE_MODE?"ForwardFileSync Move Errors.txt":"ForwardFileSync Copy Errors.txt";
-					if (!bCopyErrorsLogHereInsteadOfCurrentUserDesktop) CopyErrorsFile_FullName=Environment.GetFolderPath(Environment.SpecialFolder.Desktop)+sDirSep+CopyErrorsFile_FullName;
-					streamErr=new StreamWriter(CopyErrorsFile_FullName);
-					streamErr.WriteLine(sRemark+" -- Created "+sDateTimeNow);
+					//DateTime.Now.Year.ToString()+"-"+DateTime.Now.Month.ToString()+"-"+DateTime.Now.Day.ToString()
+					try {
+						string CopyErrorsFile_FullName="ForwardFileSync Copy Errors.txt";
+						if (!bCopyErrorsLogHereInsteadOfCurrentUserDesktop) CopyErrorsFile_FullName=Environment.GetFolderPath(Environment.SpecialFolder.Desktop)+sDirSep+CopyErrorsFile_FullName;
+						streamErr=new StreamWriter(CopyErrorsFile_FullName);
+						streamErr.WriteLine(sRemark+" -- Created "+sDateTimeNow);
+					}
+					catch (Exception exn) {
+						ShowExn(exn,"opening error log");
+					}
+					sParticiple="opening source {SourceRoot:"+ToCSharpConstant(sSourceRoot)+"}";
+					string sProcessedSource=NoEndSlashUnlessJustSlash(sSourceRoot);
+					if (sProcessedSource.EndsWith(":")) sProcessedSource+=@"\";
+					diSourceRoot=new DirectoryInfo(sProcessedSource);
+					sParticiple="creating destination {SourceRoot:"+ToCSharpConstant(sSourceRoot)+"}";
+					try {
+						if (!Directory.Exists(sDestRoot)) {
+							sParticiple="creating destination {DestRoot:"+ToCSharpConstant(sDestRoot)+"}";
+							if (bCreateBatch) {
+								Batch_WriteLine(sMD+" \""+sDestRoot+"\""); //there is no need to see if sLasMD already happened to this, because this is the root folder
+								LastCreatedDirectory_FullName=sDestRoot;
+							}
+							else Directory.CreateDirectory(sDestRoot);
+						}
+					}
+					catch (Exception exn) {
+						ShowExn(exn,sParticiple);
+					}
+					string sProcessedDest=NoEndSlashUnlessJustSlash(sDestRoot);
+					if (sProcessedDest.EndsWith(":")) sProcessedDest+=@"\";
+					sParticiple="opening destination {DestRoot:"+ToCSharpConstant(sDestRoot)+"}";
+					diDestRoot=new DirectoryInfo(sDestRoot);
+					if (diDestRoot.Exists) {
+						if (diSourceRoot.Exists) {
+							sParticiple="displaying options";
+							bool bKeepGettingPaths=true;
+							while (bKeepGettingPaths) {
+								Console.WriteLine("Excluding paths: "+((alExcludeFolder_FullNameI_Lower!=null)?ToList(alExcludeFolder_FullNameI_Lower,"\n\t(index+1)  "):"n/a"));
+								Console.WriteLine("Do you want to exclude "+((alExcludeFolder_FullNameI_Lower!=null&&alExcludeFolder_FullNameI_Lower.Count>0)?"more":"any (case-insensitive)")+" paths from source (y[es]/n[o]/c[lear])");
+								ConsoleKeyInfo ckiMorePaths=Console.ReadKey();
+								if (ckiMorePaths.Key==ConsoleKey.C) {
+									alExcludeFolder_FullNameI_Lower.Clear();
+								}
+								else if (ckiMorePaths.Key==ConsoleKey.Y) {
+									Console.Write("Path to add (enter when done typing, blank to stop adding):#");
+									string sLine=Console.ReadLine();
+									if (sLine!=null&&sLine!="") {
+										if (alExcludeFolder_FullNameI_Lower==null) alExcludeFolder_FullNameI_Lower=new ArrayList();
+										alExcludeFolder_FullNameI_Lower.Add(sLine.ToLower());
+									}
+									else bKeepGettingPaths=false;
+								}
+								else bKeepGettingPaths=false;
+							}
+							bool bKeepGettingFileFullNames=true;
+							while (bKeepGettingFileFullNames) {
+								Console.WriteLine("Excluding filenames with full path: "+((alExcludeFile_FullNameI_Lower!=null)?ToList(alExcludeFile_FullNameI_Lower,"\n\t(index+1)  "):"n/a"));
+								Console.WriteLine("Do you want to exclude "+((alExcludeFile_FullNameI_Lower!=null&&alExcludeFile_FullNameI_Lower.Count>0)?"more":"any (case-insensitive)")+" filenames with path from source (y[es]/n[o]/c[lear])");
+								ConsoleKeyInfo ckiMorePaths=Console.ReadKey();
+								if (ckiMorePaths.Key==ConsoleKey.C) {
+									alExcludeFile_FullNameI_Lower.Clear();
+								}
+								else if (ckiMorePaths.Key==ConsoleKey.Y) {
+									Console.Write("Enter full filename with path to add (enter when done typing, blank to stop adding):#");
+									string sLine=Console.ReadLine();
+									if (sLine!=null&&sLine!="") {
+										if (alExcludeFile_FullNameI_Lower==null) alExcludeFile_FullNameI_Lower=new ArrayList();
+										alExcludeFile_FullNameI_Lower.Add(sLine.ToLower());
+									}
+									else bKeepGettingFileFullNames=false;
+								}
+								else bKeepGettingFileFullNames=false;
+							}
+							Console.WriteLine();
+							Error_WriteLine("Excluding files starting with: "+((alExcludeFileStartsWithI_Lower!=null)?ToList(alExcludeFileStartsWithI_Lower,"\n\t(index+1)  "):"n/a"));
+							Error_WriteLine("Excluding files ending with: "+((alExcludeFileEndsWithI_Lower!=null)?ToList(alExcludeFileEndsWithI_Lower,"\n\t(index+1)  "):"n/a"));
+							Error_WriteLine("Excluding any folders named: "+((alExcludeFolder_NameI_Lower!=null)?ToList(alExcludeFolder_NameI_Lower,"\n\t(index+1)  "):"n/a"));
+							Error_WriteLine("Excluding full paths: "+((alExcludeFolder_FullNameI_Lower!=null)?ToList(alExcludeFolder_FullNameI_Lower,"\n\t(index+1)  "):"n/a"));
+							Error_WriteLine("Excluding full filenames with paths: "+((alExcludeFile_FullNameI_Lower!=null)?ToList(alExcludeFolder_FullNameI_Lower,"\n\t(index+1)  "):"n/a"));
+							Error_WriteLine("source: "+diSourceRoot.FullName);
+							Error_WriteLine("destination: "+diDestRoot.FullName);
+							Console.WriteLine();
+							Console.WriteLine("Continue (y/n)? ");
+							ConsoleKeyInfo ckiContinue=Console.ReadKey();
+							if (ckiContinue.Key==ConsoleKey.Y) {
+								Console.Error.WriteLine("Starting...");
+								sParticiple="showing source and destination folders";
+								string sDestinationFoldersCSharpConstant="{diSourceRoot:"+diSourceRoot.FullName+"; diDestRoot:"+diDestRoot.FullName+"}";
+								if (bCreateBatch) Batch_WriteLine(sRemark+sDestinationFoldersCSharpConstant);
+								Console.Error.WriteLine(sDestinationFoldersCSharpConstant);
+								//DirectoryInfo diSourceRoot=new DirectoryInfo(@"\\TOSHIBA1\My Documents");
+								//foreach (FileInfo fiNow in diSourceRoot.GetFiles()) {
+								//	Console.Error.WriteLine(fiNow.Name);
+								//}
+								//Console.Error.WriteLine();
+								//Console.Error.WriteLine("Folders:");
+								//foreach (DirectoryInfo diSourceSubFolder in diSourceRoot.GetDirectories()) {
+								//	Console.Error.WriteLine(diSourceSubFolder.Name);
+								//}
+								sParticiple="running backup at source root";
+								BackupTree(diSourceRoot);
+								bOK=true;
+							}
+							else {
+								Console.WriteLine("User cancelled ForwardFileSync.");
+							}
+						}//end if diSourceRoot.Exists
+						else {
+							sParticiple="cancelling due to missing source";
+							ShowErr("ERROR: Source folder "+ToCSharpConstant(sSourceRoot)+" does not exist--cannot continue!");
+						}
+					}//end if diDestRoot.Exists
+					else {
+						sParticiple="cancelling due to missing destination";
+						ShowErr("ERROR: Destination folder "+ToCSharpConstant(sDestRoot)+" does not exist--cannot continue!");
+					}
 				}
 				catch (Exception exn) {
-					ShowExn(exn,"opening error log");
+					ShowExn(exn,sParticiple);
+					//sParticiple="cancelling primary sync method due to exception error";
 				}
-				sParticipleNow="opening source {SourceRoot:"+ToCSharpConstant(sSourceRoot)+"}";
-				diSourceRoot=new DirectoryInfo(NoEndSlashUnlessJustSlash(sSourceRoot));
-				sParticipleNow="creating destination {SourceRoot:"+ToCSharpConstant(sSourceRoot)+"}";
-				if (!Directory.Exists(sDestRoot)) {
-					sParticipleNow="creating destination {DestRoot:"+ToCSharpConstant(sDestRoot)+"}";
-					if (bCreateBatch) {
-						Batch_WriteLine(sMD+" \""+sDestRoot+"\""); //there is no need to see if sLasMD already happened to this, because this is the root folder
-						LastCreatedDirectory_FullName=sDestRoot;
+				sParticiple="closing output files";
+				if (bCreateBatch) Batch_WriteLine(sRemark+(bOK?"Finished Successfully":"Failed!"));
+				Console.Error.WriteLine((bOK?"Finished Successfully.":"Failed!"));
+				try {
+					sParticiple="closing error output stream";
+					streamErr.Close();
+					sParticiple="closing failed sources list";
+					streamFailedSourcesList.Close();
+					if (bCreateBatch&&streamBatch!=null) {
+						sParticiple="closing batch";
+						streamBatch.Close();
 					}
-					else Directory.CreateDirectory(sDestRoot);
 				}
-				sParticipleNow="opening destination {DestRoot:"+ToCSharpConstant(sDestRoot)+"}";
-				diDestRoot=new DirectoryInfo(sDestRoot);
-				if (diDestRoot.Exists) {
-					if (diSourceRoot.Exists) {
-						sParticipleNow="displaying options";
-						Error_WriteLine("Excluding files starting with: "+((sarrExcludeFileStartsWithI_Lower!=null)?ToCSharpConstant(sarrExcludeFileStartsWithI_Lower):"none"));
-						Error_WriteLine("Excluding files ending with: "+((sarrExcludeFileEndsWithI_Lower!=null)?ToCSharpConstant(sarrExcludeFileEndsWithI_Lower):"none"));
-						Error_WriteLine("Excluding folders: "+((sarrExcludeFolderI_Lower!=null)?ToCSharpConstant(sarrExcludeFolderI_Lower):"none"));
-						Console.Error.WriteLine("Starting...");
-						sParticipleNow="showing source and destination folders";
-						string sDestinationFoldersCSharpConstant="{diSourceRoot:"+diSourceRoot.FullName+"; diDestRoot:"+diDestRoot.FullName+"}";
-						if (bCreateBatch) Batch_WriteLine(sRemark+sDestinationFoldersCSharpConstant);
-						Console.Error.WriteLine(sDestinationFoldersCSharpConstant);
-						//DirectoryInfo diSourceRoot=new DirectoryInfo(@"\\TOSHIBA1\My Documents");
-						//foreach (FileInfo fiNow in diSourceRoot.GetFiles()) {
-						//	Console.Error.WriteLine(fiNow.Name);
-						//}
-						//Console.Error.WriteLine();
-						//Console.Error.WriteLine("Folders:");
-						//foreach (DirectoryInfo diSourceSubFolder in diSourceRoot.GetDirectories()) {
-						//	Console.Error.WriteLine(diSourceSubFolder.Name);
-						//}
-						sParticipleNow="running backup at source root";
-						BackupTree(diSourceRoot);
-						bOK=true;
-					}//end if diSourceRoot.Exists
-					else {
-						sParticipleNow="cancelling due to missing source";
-						ShowErr("ERROR: Source folder "+ToCSharpConstant(sSourceRoot)+" does not exist--cannot continue!");
-					}
-				}//end if diDestRoot.Exists
-				else {
-					sParticipleNow="cancelling due to missing destination";
-					ShowErr("ERROR: Destination folder "+ToCSharpConstant(sDestRoot)+" does not exist--cannot continue!");
+				catch {
+					Console.Error.WriteLine("could not finish "+sParticiple+".");
 				}
+				Console.Error.WriteLine("A batch file was created called \""+Batch_FullName+"\"");
+				Console.Error.WriteLine();
+				Console.Error.Write("Press any key to continue . . . ");
+			}//end if OK to start
+			else {
+				Console.WriteLine();
+				Console.WriteLine("User cancelled ForwardFileSync.");
+				Console.WriteLine("Press any key to continue . . .");
 			}
-			catch (Exception exn) {
-				ShowExn(exn,sParticipleNow);
-				//sParticipleNow="cancelling primary sync method due to exception error";
-			}
-			sParticipleNow="closing output files";
-			if (bCreateBatch) Batch_WriteLine(sRemark+(bOK?"Finished Successfully":"Failed!"));
-			Console.Error.WriteLine((bOK?"Finished Successfully.":"Failed!"));
-			Console.Error.WriteLine();
-			Console.Error.Write("Press any key to continue . . . ");
-			Console.ReadKey(true);
-			streamErr.Close();
-			streamFailedSourcesList.Close();
-			if (bCreateBatch&&streamBatch!=null) streamBatch.Close();
+			Console.ReadKey();
 		}//end Main
 		public static bool ArrayHas(string[] array, string has) {
 			if (has!=null&&array!=null) {
@@ -239,6 +374,15 @@ namespace ForwardFileSync {
 				has=has.ToLower();
 				for (int i=0; i<array.Length; i++) {
 					if (array[i].ToLower()==has) return true;
+				}
+			}
+			return false;
+		}
+		public static bool ArrayHasI(ArrayList array, string has) {
+			if (has!=null&&array!=null) {
+				has=has.ToLower();
+				foreach (string val in array) {
+					if (val.ToLower()==has) return true;
 				}
 			}
 			return false;
@@ -268,6 +412,15 @@ namespace ForwardFileSync {
 			}
 			return false;
 		}
+		public static bool StartsWithAnyI(string Needle, ArrayList StartsWithAnyOfTheseStrings) {
+			if (Needle!=null&&StartsWithAnyOfTheseStrings!=null) {
+				string Needle_ToLower=Needle.ToLower();
+				foreach (string val in StartsWithAnyOfTheseStrings) {
+					if (Needle_ToLower.StartsWith(val.ToLower())) return true;
+				}
+			}
+			return false;
+		}
 		public static bool EndsWithAny(string Needle, string[] EndsWithAnyOfTheseStrings) {
 			if (Needle!=null&&EndsWithAnyOfTheseStrings!=null) {
 				for (int i=0; i<EndsWithAnyOfTheseStrings.Length; i++) {
@@ -285,6 +438,15 @@ namespace ForwardFileSync {
 			}
 			return false;
 		}
+		public static bool EndsWithAnyI(string Needle, ArrayList EndsWithAnyOfTheseStrings) {
+			if ((Needle!=null)&&(EndsWithAnyOfTheseStrings!=null)) {
+				string Needle_ToLower=Needle.ToLower();
+				foreach (string val in EndsWithAnyOfTheseStrings) {
+					if (Needle_ToLower.EndsWith(val.ToLower())) return true;
+				}
+			}
+			return false;
+		}
 		public static string Repeat(string val, int times) {
 			string sReturn="";
 			if (val!=null&&val!="") {
@@ -295,7 +457,7 @@ namespace ForwardFileSync {
 			return sReturn;
 		}
 		public static string ToCSharpConstant(string val) {
-			return (val!=null)?("\""+val+"\""):"null";
+			return (val!=null)?("\""+val.Replace("\"","\\\"").Replace("\\","\\\\")+"\""):"null";
 		}
 		public static string ToCSharpConstant(DirectoryInfo val) {
 			return ((val!=null)?("\""+val.FullName+"\""):("null"));
@@ -327,7 +489,10 @@ namespace ForwardFileSync {
 							bool DestSubFolder_Exists=Directory.Exists(DestSubFolder_FullName);
 							bool bIgnore=false;
 							if (SourceSubFolder_Exists) {
-								if (ArrayHasI(sarrExcludeFolderI_Lower,diSourceSubFolder.Name.ToLower())) {
+								if (ArrayHasI(alExcludeFolder_NameI_Lower,diSourceSubFolder.Name.ToLower())) {
+									bIgnore=true;
+								}
+								if (ArrayHasI(alExcludeFolder_FullNameI_Lower,diSourceSubFolder.FullName.ToLower())) {
 									bIgnore=true;
 								}
 								if (!bIgnore) {
@@ -364,23 +529,21 @@ namespace ForwardFileSync {
 							}
 							bool bIgnore=false;
 							string sNameLower=fiNow.Name.ToLower();
-							if ( EndsWithAnyI(sNameLower,sarrExcludeFileEndsWithI_Lower)
-							    || StartsWithAnyI(sNameLower,sarrExcludeFileStartsWithI_Lower) ) bIgnore=true;
+							if ( EndsWithAnyI(sNameLower,alExcludeFileEndsWithI_Lower)
+							    || StartsWithAnyI(sNameLower,alExcludeFileStartsWithI_Lower)
+							    || ArrayHasI(alExcludeFile_FullNameI_Lower,fiNow.FullName.ToLower()) ) bIgnore=true;
 							
 							Console.Error.WriteLine((bIgnore?"(ignored)":"")+"Destination"+(DestFile_Exists?"":"*")+": "+DestFile_FullName);
 							if (!bIgnore) {
 								if (!DestFile_Exists||bForceOverWriteExisting) {
-									if (!bTestOnly) {
-										if (b_MOVE_MODE) fiNow.MoveTo(DestFile_FullName);
-										else fiNow.CopyTo(DestFile_FullName,bForceOverWriteExisting);
-									}
-									if (bCreateBatch) Batch_WriteLine(sCP+" "+ToCSharpConstant(fiNow)+" \""+DestFile_FullName+"\"");
+									if (!bTestOnly) fiNow.CopyTo(DestFile_FullName,bForceOverWriteExisting);
+									if (bCreateBatch) Batch_WriteLine(sCP+" \""+fiNow.FullName+"\" \""+DestFile_FullName+"\"");
 								}
 							}
 						}
 						catch (Exception exn) {
-							FailedSourcesList_WriteLine(sCP+" "+ToCSharpConstant(fiNow.FullName)+" "+ToCSharpConstant(DestFile_FullName));
-							ShowExn(exn,"processing file "+ToCSharpConstant(fiNow));
+							FailedSourcesList_WriteLine(sCP+" \""+fiNow.FullName+"\" \""+DestFile_FullName+"\"");
+							ShowExn(exn,"processing file \""+fiNow.FullName+"\"");
 						}
 					}//end foreach fiNow in diSourceParent
 				}//end if diSourceParent.Exists
@@ -389,7 +552,7 @@ namespace ForwardFileSync {
 				}
 			}
 			catch (Exception exn) {
-				FailedSourcesList_WriteLine(sMD+" "+ToCSharpConstant(DestParentFolder_FullNameSlash)); //only add line to create folder, to distinguish from subfolder reading error above
+				FailedSourcesList_WriteLine(sMD+" \""+DestParentFolder_FullNameSlash+"\""); //only add line to create folder, to distinguish from subfolder reading error above
 				ShowExn(exn,"processing parent folder"+Space_Then_ParentFolderFullName);
 			}
 		}//BackupTree
