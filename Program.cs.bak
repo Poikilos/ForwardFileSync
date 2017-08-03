@@ -1,0 +1,162 @@
+/*
+ * Created by SharpDevelop.
+ * User: Owner
+ * Date: 3/9/2009
+ * Time: 10:45 AM
+ * 
+ * To change this template use Tools | Options | Coding | Edit Standard Headers.
+ */
+using System;
+using System.IO;
+using System.Collections;
+
+namespace ForwardFileSync
+{
+	class Program
+	{
+		public static string[] sarrFolderStack=new string[1024];
+		public static int iFolderDepth=0;
+		public static string sSourceRoot=@"E:\Projects\NetRebuild";//source
+		public static string sDestRoot=@"0:\Backup\E\Projects\NetRebuild";//no slash
+		public static string[] sarrExcludeFolderI=new string[] {"1.others",};//must be lower
+		public static string[] sarrExcludeFileStartsWithI=new string[] {"itunes library","itunes music library"};//must be lower
+		public static string[] sarrExcludeFileEndsWithI=new string[] {".itl"};//must be lower
+		
+		public static DirectoryInfo diSourceRoot=null;
+		public static DirectoryInfo diDestRoot=null;
+		public static StreamWriter streamErr=null;
+		public static void Main(string[] args)
+		{
+			streamErr=new StreamWriter(@"C:\Documents and Settings\Owner\My Documents\ForwardFileSync Copy Errors.txt");
+			diSourceRoot=new DirectoryInfo(sSourceRoot);
+			if (!Directory.Exists(sDestRoot)) Directory.CreateDirectory(sDestRoot);
+			diDestRoot=new DirectoryInfo(sDestRoot);
+			Console.WriteLine("Starting...");
+			//DirectoryInfo diSourceRoot=new DirectoryInfo(@"\\TOSHIBA1\My Documents");
+			//foreach (FileInfo fiNow in diSourceRoot.GetFiles()) {
+			//	Console.WriteLine(fiNow.Name);
+			//}
+			//Console.WriteLine();
+			//Console.WriteLine("Folders:");
+			//foreach (DirectoryInfo diNow in diSourceRoot.GetDirectories()) {
+			//	Console.WriteLine(diNow.Name);
+			//}
+			BackupTree(diSourceRoot);
+			Console.Write("Press any key to continue . . . ");
+			Console.ReadKey(true);
+			streamErr.Close();
+		}
+		public static bool ArrayHas(string[] array, string has) {
+			for (int i=0; i<array.Length; i++) {
+				if (array[i]==has) return true;
+			}
+			return false;
+		}
+		public static bool ArrayHasI(string[] array, string has) {
+			has=has.ToLower();
+			for (int i=0; i<array.Length; i++) {
+				if (array[i].ToLower()==has) return true;
+			}
+			return false;
+		}
+		//public static bool ArrayHasI(string[] array, string has) {
+		//	if (array!=null&&has!=null&&has!="") {
+		//		for (int i=0; i<array.Length; i++) {
+		//			if (array[i].ToLower()==has.ToLower()) return true;
+		//		}
+		//	}
+		//	return false;
+		//}
+		public static bool StartsWithAny(string s, string[] StartsWithAnyOfTheseStrings) {
+			for (int i=0; i<StartsWithAnyOfTheseStrings.Length; i++) {
+				if (s.StartsWith(StartsWithAnyOfTheseStrings[i])) return true;
+			}
+			return false;
+		}
+		public static bool StartsWithAnyI(string s, string[] StartsWithAnyOfTheseStrings) {
+			s=s.ToLower();
+			for (int i=0; i<StartsWithAnyOfTheseStrings.Length; i++) {
+				if (s.StartsWith(StartsWithAnyOfTheseStrings[i].ToLower())) return true;
+			}
+			return false;
+		}
+		public static bool EndsWithAny(string s, string[] EndsWithAnyOfTheseStrings) {
+			for (int i=0; i<EndsWithAnyOfTheseStrings.Length; i++) {
+				if (s.EndsWith(EndsWithAnyOfTheseStrings[i])) return true;
+			}
+			return false;
+		}
+		public static bool EndsWithAnyI(string s, string[] EndsWithAnyOfTheseStrings) {
+			s=s.ToLower();
+			for (int i=0; i<EndsWithAnyOfTheseStrings.Length; i++) {
+				if (s.EndsWith(EndsWithAnyOfTheseStrings[i].ToLower())) return true;
+			}
+			return false;
+		}
+		public static void BackupTree(DirectoryInfo diParent) {
+			foreach (DirectoryInfo diNow in diParent.GetDirectories()) {
+				try {
+					
+					bool bExists=Directory.Exists(diNow.FullName);//;Directory.Exists(DestFolder(diNow.Name));
+					if (!Directory.Exists(DestFolder(diNow.Name))) Directory.CreateDirectory(DestFolder(diNow.Name));
+					bool bIgnore=false;
+					if (bExists) {
+						if (ArrayHasI(sarrExcludeFolderI,diNow.Name.ToLower())) {
+							bIgnore=true;
+						}
+						if (!bIgnore) {
+							Console.WriteLine("Folder"+(bExists?"":"*")+": "+DestFolder(diNow.Name));
+							if (!bExists) Directory.CreateDirectory(DestFolder(diNow.Name));
+							sarrFolderStack[iFolderDepth]=diNow.Name;
+							iFolderDepth++;
+							BackupTree(diNow);
+							iFolderDepth--;
+						}
+						else {
+							Console.WriteLine("Folder ignored: "+DestFolder(diNow.Name));
+						}
+					}
+					else {
+						Console.WriteLine("Folder could not be read: "+DestFolder(diNow.Name));
+					}
+				}
+				catch (Exception exn) {
+					streamErr.WriteLine(exn.ToString());
+					Console.Error.WriteLine(exn.ToString());
+				}
+			}//end foreach subdirectory in directory
+			foreach (FileInfo fiNow in diParent.GetFiles()) {
+				try {
+					bool bExists=File.Exists(NameToDestFullName(fiNow.Name));
+					bool bIgnore=false;
+					string sNameLower=fiNow.Name.ToLower();
+					if ( EndsWithAnyI(sNameLower,sarrExcludeFileEndsWithI)
+					    || StartsWithAnyI(sNameLower,sarrExcludeFileStartsWithI) ) bIgnore=true;
+					
+					Console.WriteLine((bIgnore?"(ignored)":"")+"File"+(bExists?"":"*")+": "+NameToDestFullName(fiNow.Name));
+					if (!bIgnore) {
+						if (!bExists) fiNow.CopyTo(NameToDestFullName(fiNow.Name));
+					}
+					
+				}
+				catch (Exception exn) {
+					streamErr.WriteLine(exn.ToString());
+					Console.Error.WriteLine(exn.ToString());
+				}
+			}//end foreach file in directory
+		}//BackupTree
+		public static string DestNamePrecedent() {
+			string sReturn=sDestRoot;
+			for (int iNow=0; iNow<iFolderDepth; iNow++) {
+				sReturn+=@"\"+sarrFolderStack[iNow];
+			}
+			return sReturn;
+		}
+		public static string NameToDestFullName(string sFileNameOnly) {
+			return DestNamePrecedent()+@"\"+sFileNameOnly;
+		}
+		public static string DestFolder(string sFolderNameOnly) {
+			return DestNamePrecedent()+@"\"+sFolderNameOnly;
+		}
+	}
+}
