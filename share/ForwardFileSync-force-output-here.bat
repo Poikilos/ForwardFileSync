@@ -1,0 +1,1 @@
+E:\Projects\ForwardFileSync\bin>ForwardFileSync "SilverRestore H root (Ocean_e in usb enclosure) SpatialForegroundRemover.VDPlugin (withdelete).ffs" 1>D:\Projects\ForwardFileSync\bin\out.txt 2>D:\Projects\ForwardFileSync\bin\err.txt
