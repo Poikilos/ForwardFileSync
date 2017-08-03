@@ -1,2 +1,2 @@
 # ForwardFileSync
-A console sync program with easy filtering syntax, designed for running with a script file as a parameter.
+A console sync program with easy filtering syntax (script filename is only parameter).
