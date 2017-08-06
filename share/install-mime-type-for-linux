@@ -1,0 +1,35 @@
+#!/bin/sh
+
+#NOTES on the xml file:
+#see also https://developer.gnome.org/integration-guide/stable/mime.html.en
+#see also https://wiki.archlinux.org/index.php/default_applications#MIME_types
+# * note that mime-type tag is inside the mime-info tag (as per sites above)
+# * glob-deleteall "indicates that patterns from previously parsed directories must be discarded" - https://developer.gnome.org/shared-mime-info-spec
+
+#NOTES on desktop file:
+#Desktop file installed in applications folder should include MimeType line such as:
+#	MimeType=text/x-forwardfilesyncscript
+# to indicate to the system that the application can open the mimetype
+
+
+USER_MIMETYPES_DB_PATH=$HOME/.local/share/mime
+USER_MIMETYPES_DB_PATH=$USER_MIMETYPES_DB_PATH/packages
+
+#or alternatively, install system-wide at:
+SYSTEM_MIMETYPES_DB_PATH=/usr/share/mime/packages
+SYSTEM_MIMETYPES_DB_PATH=/usr/share/mime
+
+MIMETYPES_DB_PATH=$USER_MIMETYPES_DB_PATH
+MIMETYPES_DB_PATH=$USER_MIMETYPES_DB_PATH
+
+if [ ! -d "$MIMETYPES_DB_PATH" ]; then
+mkdir "$MIMETYPES_DB_PATH"
+fi
+THIS_MIMETYPE_FILE_NAME=text-x-forwardfilesyncscript.xml
+if [ -f "$THIS_MIMETYPE_FILE_NAME" ]; then
+sudo cp -f "$THIS_MIMETYPE_FILE_NAME" "$MIMETYPES_DB_PATH/"
+update-mime-database "$MIMETYPES_DB_PATH"
+else
+echo "ERROR: $THIS_MIMETYPE_FILE_NAME must be in working directory in order to install it using this script!"
+exit 1
+fi

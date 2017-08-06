@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=ForwardFileSync
+Comment=a script-based fault-tolerant file copier with drive label search
+GenericName=ForwardFileSync
+Exec=/usr/local/bin/ForwardFileSync %F
+Icon=Thunar
+Terminal=false
+StartupNotify=true
+Type=Application
+Categories=System;Utility;Filesystem;
+MimeType=text/x-forwardfilesyncscript;
+# vi:set encoding=UTF-8:
